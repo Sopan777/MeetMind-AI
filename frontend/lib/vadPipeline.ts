@@ -33,9 +33,6 @@ export class VADPipeline {
 
         positiveSpeechThreshold: 0.8,
         negativeSpeechThreshold: 0.3,
-        minSpeechFrames: 5,
-        redemptionFrames: 8,
-        preSpeechPadFrames: 3,
         submitUserSpeechOnPause: true,
 
         onSpeechStart: () => {

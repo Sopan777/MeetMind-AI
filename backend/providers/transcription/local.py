@@ -51,15 +51,11 @@ class LocalWhisperProvider(TranscriptionProvider):
                 # Import here to avoid overhead if this provider isn't used
                 from faster_whisper import WhisperModel
                 
-                # Run model loading in executor to prevent blocking event loop
-                loop = asyncio.get_event_loop()
-                _model_instance = await loop.run_in_executor(
-                    None,
-                    lambda: WhisperModel(
-                        self.model_size,
-                        device=self.device,
-                        compute_type=self.compute_type
-                    )
+                # Run loading synchronously to avoid asyncio threading bugs with ctranslate2
+                _model_instance = WhisperModel(
+                    self.model_size,
+                    device=self.device,
+                    compute_type=self.compute_type
                 )
                 logger.info("Successfully loaded local Whisper model.")
             except ImportError:

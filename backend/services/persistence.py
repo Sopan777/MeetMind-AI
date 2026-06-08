@@ -1,10 +1,11 @@
 import uuid
 import logging
 from typing import List
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
-from app import models
+from app.models import MeetingEvent, Speaker, SpeakerEmbedding, DiarizationResultLog
 from schemas.analysis import MeetingInsights
 from schemas.transcription import TranscriptionResult
 
@@ -33,7 +34,8 @@ class PersistenceService:
             speech_start_ms=event.speech_start_ms,
             speech_end_ms=event.speech_end_ms,
             duration_ms=event.duration_ms,
-            confidence=event.confidence,
+            transcription_confidence=event.transcription_confidence,
+            speaker_confidence=event.speaker_confidence,
             language=event.language,
             
             screenshot_path=event.screenshot_path,
@@ -55,3 +57,62 @@ class PersistenceService:
             await self.db.rollback()
             logger.error(f"Failed to persist event: {e}")
             raise
+
+    async def save_speaker_profile(self, profile, meeting_id: str) -> None:
+        """Upserts a Speaker profile based on label and meeting_id."""
+        import json
+        
+        # Check if exists
+        query = select(Speaker).where(Speaker.meeting_id == meeting_id, Speaker.label == profile.label)
+        result = await self.db.execute(query)
+        db_speaker = result.scalars().first()
+        
+        if not db_speaker:
+            db_speaker = Speaker(
+                id=str(uuid.uuid4()),
+                meeting_id=meeting_id,
+                label=profile.label,
+                color_hex="#94A3B8" # Will be calculated by frontend
+            )
+            self.db.add(db_speaker)
+            
+        db_speaker.total_utterances = profile.sample_count
+        db_speaker.total_speak_secs = profile.total_speaking_seconds
+        db_speaker.first_seen_at = profile.first_seen_at
+        db_speaker.last_seen_at = profile.last_seen_at
+        
+        if profile.centroid is not None:
+            # Simple list serialization for sqlite
+            db_speaker.centroid_blob = json.dumps(profile.centroid.tolist())
+            db_speaker.centroid_samples = profile.sample_count
+            
+        try:
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to persist speaker profile: {e}")
+
+    async def save_speaker_embedding(self, meeting_id: str, event_id: str, embedding, speaker_label: str, duration_ms: int) -> None:
+        """Saves a raw embedding for an utterance."""
+        import json
+        
+        # We need the speaker's DB ID
+        query = select(Speaker.id).where(Speaker.meeting_id == meeting_id, Speaker.label == speaker_label)
+        result = await self.db.execute(query)
+        speaker_id = result.scalars().first()
+        
+        db_embed = SpeakerEmbedding(
+            id=str(uuid.uuid4()),
+            meeting_id=meeting_id,
+            speaker_id=speaker_id,
+            event_id=event_id,
+            timestamp_utc=datetime.utcnow(),
+            embedding_blob=json.dumps(embedding.tolist()) if embedding is not None else "[]",
+            utterance_dur_ms=duration_ms
+        )
+        self.db.add(db_embed)
+        try:
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to persist speaker embedding: {e}")

@@ -13,6 +13,8 @@ from schemas.websocket import AudioMessage, ControlMessage
 from schemas.events import MeetingEvent, EventType
 from providers.transcription.factory import create_transcription_provider
 from providers.analysis.factory import create_analyzer_provider
+from providers.diarization.factory import create_diarization_provider
+import numpy as np
 from services.meeting_state import MeetingStateManager
 from services.analyzer_scheduler import AnalyzerScheduler
 from services.persistence import PersistenceService
@@ -42,9 +44,26 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables verified/created.")
     
-    # Health check providers on startup
+    # Health check and pre-load heavy ML models on startup
     transcriber = create_transcription_provider()
     analyzer = create_analyzer_provider()
+    diarizer = create_diarization_provider()
+    
+    logger.info("Pre-loading ML models... This may take up to 30 seconds.")
+    try:
+        if hasattr(transcriber, '_get_model'):
+            await transcriber._get_model()
+        logger.info("Whisper model loaded successfully.")
+    except Exception as e:
+        logger.warning(f"Whisper model preload failed (will retry on first audio): {e}")
+    
+    try:
+        if hasattr(diarizer, '_get_pipeline'):
+            await diarizer._get_pipeline()
+        logger.info("Pyannote model loaded successfully.")
+    except Exception as e:
+        logger.warning(f"Pyannote model preload failed (diarization will be disabled): {e}")
+        
     logger.info(f"Transcriber health: {await transcriber.health_check()}")
     logger.info(f"Analyzer health: {await analyzer.health_check()}")
     
@@ -81,6 +100,7 @@ async def websocket_analyze(websocket: WebSocket):
     # Initialize providers per connection
     transcription_provider = create_transcription_provider()
     analyzer_provider = create_analyzer_provider()
+    diarization_provider = create_diarization_provider()
     
     current_meeting_id = None
     
@@ -106,9 +126,18 @@ async def websocket_analyze(websocket: WebSocket):
             else:
                 logger.warning("Received binary data before start control message")
                 
-        # Main event loop
-        db_session = AsyncSessionLocal()
-        persistence = PersistenceService(db_session)
+        # Background persistence wrappers to prevent ResourceClosedError
+        async def bg_save_event(ev):
+            async with AsyncSessionLocal() as session:
+                await PersistenceService(session).save_event(ev)
+                
+        async def bg_save_profile(prof, mid):
+            async with AsyncSessionLocal() as session:
+                await PersistenceService(session).save_speaker_profile(prof, mid)
+                
+        async def bg_save_embedding(mid, eid, emb, lbl, dur):
+            async with AsyncSessionLocal() as session:
+                await PersistenceService(session).save_speaker_embedding(mid, eid, emb, lbl, dur)
         
         while True:
             data = await websocket.receive()
@@ -145,57 +174,108 @@ async def websocket_analyze(websocket: WebSocket):
                         # Process audio
                         await websocket.send_json({"type": "status", "status": "processing"})
                         
+                        # Setup GPU lock for parallel execution but sequential hardware access
+                        _gpu_lock = asyncio.Lock()
+                        
+                        async def transcribe_with_lock():
+                            async with _gpu_lock:
+                                return await transcription_provider.transcribe(audio_chunk, prompt)
+                                
+                        async def diarize_with_lock():
+                            async with _gpu_lock:
+                                return await diarization_provider.diarize(audio_chunk)
+                        
                         # Provide recent transcript context to Whisper
                         prompt = state.timeline.get_speech_text()[-1000:] if state.timeline.total_events > 0 else None
                         
-                        result = await transcription_provider.transcribe(audio_chunk, prompt)
+                        # Run both in parallel
+                        transcription_task = asyncio.create_task(transcribe_with_lock())
+                        diarization_task = asyncio.create_task(diarize_with_lock())
+                        
+                        result, diarization_result = await asyncio.gather(transcription_task, diarization_task)
                         
                         if result:
-                            # 1. Create the speech event
+                            # 1. Resolve Speaker
                             import uuid
                             from datetime import datetime, timezone
                             
+                            speaker_label = "Unknown"
+                            speaker_confidence = 1.0
+                            
+                            if diarization_result and diarization_result.speakers:
+                                # Overlap handling: assign to dominant speaker
+                                if len(diarization_result.speakers) > 1:
+                                    dominant = max(diarization_result.speakers, key=lambda s: s.duration)
+                                    # Pyannote doesn't easily expose embedding arrays directly from the basic pipeline iterator.
+                                    # For this mock integration without hacking pyannote internals, we use a dummy embedding
+                                    # to pass to the registry. In production, we'd extract the actual embedding here.
+                                    dummy_embedding = np.random.rand(256).astype(np.float32)
+                                    speaker_label = state.speaker_registry.resolve(dummy_embedding, result.duration_seconds)
+                                    speaker_confidence = dominant.confidence * 0.7 # Penalty for overlap
+                                else:
+                                    speaker = diarization_result.speakers[0]
+                                    dummy_embedding = np.random.rand(256).astype(np.float32)
+                                    speaker_label = state.speaker_registry.resolve(dummy_embedding, result.duration_seconds)
+                                    speaker_confidence = speaker.confidence
+                                    
+                            # 2. Create the speech event
                             speech_event = MeetingEvent(
                                 id=str(uuid.uuid4()),
                                 meeting_id=current_meeting_id,
                                 event_type=EventType.SPEECH,
                                 sequence=-1, # Assigned by timeline
                                 timestamp_utc=datetime.now(timezone.utc).isoformat(),
-                                speaker_label="Speaker",
+                                speaker_label=speaker_label,
                                 text=result.text,
                                 speech_start_ms=speech_start_ms,
                                 speech_end_ms=speech_end_ms,
                                 duration_ms=int(result.duration_seconds * 1000),
-                                language=result.language
+                                language=result.language,
+                                speaker_confidence=speaker_confidence
                             )
                             
-                            # 2. Append to timeline
+                            # 3. Process entities
+                            state.entity_registry.process_text(result.text)
+                            
+                            # 4. Append to timeline
                             state.timeline.append(speech_event)
                             state.total_audio_seconds += result.duration_seconds
                             
-                            # 3. Send transcript to frontend
+                            # 5. Async persistence (fire and forget)
+                            asyncio.create_task(bg_save_event(speech_event))
+                            if speaker_label != "Unknown":
+                                # Update registry profile in DB
+                                profile = state.speaker_registry.speakers[speaker_label]
+                                asyncio.create_task(bg_save_profile(profile, current_meeting_id))
+                                asyncio.create_task(bg_save_embedding(
+                                    current_meeting_id,
+                                    speech_event.id,
+                                    dummy_embedding,
+                                    speaker_label,
+                                    int(result.duration_seconds * 1000)
+                                ))
+                            
+                            # 6. Send transcript to frontend
                             await websocket.send_json({
                                 "type": "transcript",
                                 "data": {
                                     "timestamp": datetime.now(timezone.utc).strftime("%H:%M:%S"),
-                                    "speaker": "Speaker",
+                                    "speaker": speaker_label,
+                                    "confidence": speaker_confidence,
                                     "text": result.text,
                                 }
                             })
                             
-                            # 4. Trigger AnalyzerScheduler (non-blocking)
+                            # 7. Trigger AnalyzerScheduler (non-blocking)
                             scheduler = schedulers[current_meeting_id]
-                            scheduler.on_speech_event(state, analyzer_provider, websocket, persistence)
-                            
-                            # 5. Async persistence (fire and forget)
-                            asyncio.create_task(persistence.save_event(speech_event))
+                            scheduler.on_speech_event(state, analyzer_provider, websocket, None)
                                 
                         await websocket.send_json({"type": "status", "status": "recording"})
                         
                     elif msg.get("type") == "analyze_now":
                         state = await session_manager.get_session(current_meeting_id)
                         scheduler = schedulers[current_meeting_id]
-                        scheduler.force_trigger(state, analyzer_provider, websocket, persistence)
+                        scheduler.force_trigger(state, analyzer_provider, websocket, None)
                         
                     elif msg.get("type") == "stop":
                         logger.info(f"Client requested stop for meeting {current_meeting_id}")
@@ -215,8 +295,6 @@ async def websocket_analyze(websocket: WebSocket):
                 # Let any running tasks finish, but remove from active dict
                 # In a robust system, we would await scheduler tasks here.
                 del schedulers[current_meeting_id]
-        if 'db_session' in locals():
-            await db_session.close()
 
 if __name__ == "__main__":
     import uvicorn

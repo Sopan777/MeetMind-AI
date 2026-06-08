@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     NVIDIA_MODEL: str = "nvidia/llama-3.3-nemotron-super-49b-v1"
     GEMINI_API_KEY: str = ""
     
+    # Diarization
+    DIARIZATION_PROVIDER: str = "pyannote"
+    DIARIZATION_DEVICE: str = "cpu" # Recommended CPU to not block Whisper
+    HF_TOKEN: str = ""
+    
     # Application tuning
     MAX_UTTERANCE_DURATION_SECONDS: int = 15
     

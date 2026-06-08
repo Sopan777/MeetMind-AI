@@ -2,12 +2,14 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 import uuid
+import difflib
+from typing import List, Dict, Any
 
 from core.config import settings
 from .meeting_state import MeetingState
 from .context_builder import ContextBuilder
 from schemas.events import MeetingEvent, EventType, InsightType
-from schemas.analysis import MeetingInsights
+from schemas.analysis import MeetingInsights, ActionItem, Decision
 from providers.analysis.base import AnalyzerProvider
 
 logger = logging.getLogger(__name__)
@@ -42,25 +44,18 @@ class AnalyzerScheduler:
     def on_speech_event(self, state: MeetingState, analyzer: AnalyzerProvider, websocket, persistence) -> None:
         """Called whenever a new speech event is added to the timeline."""
         self.utterances_since_extraction += 1
-        self.utterances_since_summary += 1
         
         now = datetime.now(timezone.utc)
         
-        # Check Channel 1: Extraction
-        if self._should_extract(now):
-            self._trigger_extraction(state, analyzer, websocket, persistence, now)
-            
-        # Check Channel 2: Summary
-        if self._should_summarize(now):
-            self._trigger_summary(state, analyzer, websocket, persistence, now)
+        if self._should_run(now):
+            self._trigger_agents(state, analyzer, websocket, persistence, now)
             
     def force_trigger(self, state: MeetingState, analyzer: AnalyzerProvider, websocket, persistence) -> None:
         """User pressed 'Analyze Now'. Bypasses all thresholds."""
         now = datetime.now(timezone.utc)
-        self._trigger_extraction(state, analyzer, websocket, persistence, now)
-        self._trigger_summary(state, analyzer, websocket, persistence, now)
+        self._trigger_agents(state, analyzer, websocket, persistence, now)
 
-    def _should_extract(self, now: datetime) -> bool:
+    def _should_run(self, now: datetime) -> bool:
         if self._extraction_task and not self._extraction_task.done():
             return False # Already running
             
@@ -69,100 +64,106 @@ class AnalyzerScheduler:
                 return True
         return False
         
-    def _should_summarize(self, now: datetime) -> bool:
-        if self._summary_task and not self._summary_task.done():
-            return False # Already running
-            
-        if self.utterances_since_summary >= settings.SUMMARY_UTTERANCE_THRESHOLD:
-            if not self.last_summary_utc or (now - self.last_summary_utc).total_seconds() >= settings.ANALYZER_MIN_INTERVAL_SECONDS:
-                return True
-        return False
-        
-    def _trigger_extraction(self, state: MeetingState, analyzer: AnalyzerProvider, websocket, persistence, now: datetime) -> None:
+    def _trigger_agents(self, state: MeetingState, analyzer: AnalyzerProvider, websocket, persistence, now: datetime) -> None:
         self.utterances_since_extraction = 0
         self.last_extraction_utc = now
         
-        prompt = ContextBuilder.build_extraction_prompt(state.timeline)
-        if not prompt:
-            return
-            
+        entities = state.entity_registry.get_all()
+        action_prompt = ContextBuilder.build_action_prompt(state.timeline, entities)
+        decision_prompt = ContextBuilder.build_decision_prompt(state.timeline, entities)
+        summary_prompt = ContextBuilder.build_summary_prompt(state.timeline, self.current_insights.summary)
+        
         self._extraction_task = asyncio.create_task(
-            self._run_extraction_task(prompt, state, analyzer, websocket, persistence)
+            self._run_parallel_agents(action_prompt, decision_prompt, summary_prompt, state, analyzer, websocket)
         )
         
-    def _trigger_summary(self, state: MeetingState, analyzer: AnalyzerProvider, websocket, persistence, now: datetime) -> None:
-        self.utterances_since_summary = 0
-        self.last_summary_utc = now
-        
-        prompt = ContextBuilder.build_summary_prompt(state.timeline, self.current_insights.summary)
-        if not prompt:
-            return
-            
-        self._summary_task = asyncio.create_task(
-            self._run_summary_task(prompt, state, analyzer, websocket, persistence)
-        )
-        
-    async def _run_extraction_task(self, prompt: str, state: MeetingState, analyzer: AnalyzerProvider, websocket, persistence) -> None:
+    async def _run_parallel_agents(self, action_prompt: str, decision_prompt: str, summary_prompt: str, state: MeetingState, analyzer: AnalyzerProvider, websocket) -> None:
         try:
-            logger.info(f"Running extraction channel for {self.meeting_id}...")
-            # Note: We are using the main analyzer which currently returns everything. 
-            # In a true split, we'd have a specific extraction prompt for the LLM.
-            # For now, we reuse the existing prompt but we only update the extraction fields.
-            insights = await analyzer.analyze(prompt)
-            if insights:
-                # Merge into current state
-                self.current_insights.action_items = insights.action_items
-                self.current_insights.decisions = insights.decisions
-                self.current_insights.risks = insights.risks
+            logger.info(f"Running parallel multi-agent pipeline for {self.meeting_id}...")
+            
+            # Define schemas with evidence and confidence
+            action_schema = '{"action_items": [{"owner": "string", "task": "string", "deadline": "string", "quote": "string", "confidence": "float (0.0-1.0)"}]}'
+            decision_schema = '{"decisions": [{"decision": "string", "timestamp": "string", "quote": "string", "confidence": "float (0.0-1.0)"}]}'
+            summary_schema = '{"summary": "string"}'
+            
+            # Fire all requests concurrently
+            tasks = []
+            if action_prompt:
+                tasks.append(analyzer.analyze_agent(action_prompt, action_schema))
+            else:
+                tasks.append(asyncio.sleep(0, result=None))
                 
-                # Send to frontend
-                await websocket.send_json({
-                    "type": "insights",
-                    "data": self.current_insights.model_dump(),
-                })
+            if decision_prompt:
+                tasks.append(analyzer.analyze_agent(decision_prompt, decision_schema))
+            else:
+                tasks.append(asyncio.sleep(0, result=None))
                 
-                # Log event to timeline
-                insight_event = MeetingEvent(
-                    id=str(uuid.uuid4()),
-                    meeting_id=self.meeting_id,
-                    event_type=EventType.INSIGHT,
-                    sequence=-1, # Will be set by timeline
-                    timestamp_utc=datetime.now(timezone.utc).isoformat(),
-                    insight_type=InsightType.ACTION_ITEM, # Representing an extraction run
-                    content_json=insights.model_dump_json()
-                )
-                state.timeline.append(insight_event)
+            if summary_prompt:
+                tasks.append(analyzer.analyze_agent(summary_prompt, summary_schema))
+            else:
+                tasks.append(asyncio.sleep(0, result=None))
                 
-                # We could also persist an AnalyzerSnapshot here
+            # Wait for all to complete in parallel
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            action_result = results[0] if not isinstance(results[0], Exception) else None
+            decision_result = results[1] if not isinstance(results[1], Exception) else None
+            summary_result = results[2] if not isinstance(results[2], Exception) else None
+            
+            # Deduplicate and Merge results
+            if action_result and "action_items" in action_result:
+                for new_item in action_result["action_items"]:
+                    if not new_item.get("quote"): continue # Filter hallucinated (no evidence)
+                    
+                    # Deduplication
+                    is_duplicate = False
+                    for existing in self.current_insights.action_items:
+                        similarity = difflib.SequenceMatcher(None, existing.task.lower(), new_item.get("task", "").lower()).ratio()
+                        if similarity > 0.8:
+                            is_duplicate = True
+                            # Preserve highest confidence
+                            if new_item.get("confidence", 0) > existing.confidence:
+                                existing.confidence = new_item.get("confidence", 0)
+                                existing.quote = new_item.get("quote", existing.quote)
+                            break
+                    if not is_duplicate:
+                        self.current_insights.action_items.append(ActionItem(**new_item))
+
+            if decision_result and "decisions" in decision_result:
+                for new_item in decision_result["decisions"]:
+                    if not new_item.get("quote"): continue
+                    
+                    is_duplicate = False
+                    for existing in self.current_insights.decisions:
+                        similarity = difflib.SequenceMatcher(None, existing.decision.lower(), new_item.get("decision", "").lower()).ratio()
+                        if similarity > 0.8:
+                            is_duplicate = True
+                            if new_item.get("confidence", 0) > existing.confidence:
+                                existing.confidence = new_item.get("confidence", 0)
+                            break
+                    if not is_duplicate:
+                        self.current_insights.decisions.append(Decision(**new_item))
+
+            if summary_result and "summary" in summary_result:
+                self.current_insights.summary = summary_result["summary"]
+                
+            # Send aggregated update to frontend
+            await websocket.send_json({
+                "type": "insights",
+                "data": self.current_insights.model_dump(),
+            })
+            
+            # Log single combined event to timeline
+            insight_event = MeetingEvent(
+                id=str(uuid.uuid4()),
+                meeting_id=self.meeting_id,
+                event_type=EventType.INSIGHT,
+                sequence=-1, 
+                timestamp_utc=datetime.now(timezone.utc).isoformat(),
+                insight_type=InsightType.SUMMARY, 
+                content_json=self.current_insights.model_dump_json()
+            )
+            state.timeline.append(insight_event)
                 
         except Exception as e:
-            logger.error(f"Extraction task failed: {e}")
-            
-    async def _run_summary_task(self, prompt: str, state: MeetingState, analyzer: AnalyzerProvider, websocket, persistence) -> None:
-        try:
-            logger.info(f"Running summary channel for {self.meeting_id}...")
-            insights = await analyzer.analyze(prompt)
-            if insights and insights.summary:
-                # Update current summary
-                self.current_insights.summary = insights.summary
-                
-                # Send to frontend
-                await websocket.send_json({
-                    "type": "insights",
-                    "data": self.current_insights.model_dump(),
-                })
-                
-                # Log event
-                insight_event = MeetingEvent(
-                    id=str(uuid.uuid4()),
-                    meeting_id=self.meeting_id,
-                    event_type=EventType.INSIGHT,
-                    sequence=-1,
-                    timestamp_utc=datetime.now(timezone.utc).isoformat(),
-                    insight_type=InsightType.SUMMARY,
-                    content_json=insights.summary
-                )
-                state.timeline.append(insight_event)
-                
-        except Exception as e:
-            logger.error(f"Summary task failed: {e}")
+            logger.error(f"Multi-agent pipeline failed: {e}")

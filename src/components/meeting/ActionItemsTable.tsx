@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowUpDown } from "lucide-react";
+import { Check, X, Clock } from "lucide-react";
 import type { ActionItem } from "@/lib/mock-data";
 
 const statusStyles: Record<string, string> = {
@@ -27,6 +27,13 @@ type SortKey = "task" | "owner" | "deadline" | "status" | "priority";
 export default function ActionItemsTable({ items }: ActionItemsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("priority");
   const [sortAsc, setSortAsc] = useState(false);
+  const [reviewStatuses, setReviewStatuses] = useState<Record<string, "pending" | "accepted" | "rejected">>(
+    items.reduce((acc, item) => ({ ...acc, [item.id]: "pending" }), {})
+  );
+
+  const handleReview = (id: string, status: "accepted" | "rejected") => {
+    setReviewStatuses((prev) => ({ ...prev, [id]: status }));
+  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(!sortAsc);
@@ -56,6 +63,7 @@ export default function ActionItemsTable({ items }: ActionItemsTableProps) {
     { key: "deadline", label: "Deadline" },
     { key: "status", label: "Status" },
     { key: "priority", label: "Priority" },
+    { key: "status" as SortKey, label: "Review" },
   ];
 
   return (
@@ -119,6 +127,34 @@ export default function ActionItemsTable({ items }: ActionItemsTableProps) {
                     {item.priority}
                   </span>
                 </div>
+              </td>
+              <td className="px-4 py-3 text-right">
+                {reviewStatuses[item.id] === "pending" ? (
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => handleReview(item.id, "accepted")}
+                      className="p-1.5 rounded-md hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400 transition-colors"
+                      title="Accept"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleReview(item.id, "rejected")}
+                      className="p-1.5 rounded-md hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
+                      title="Reject"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : reviewStatuses[item.id] === "accepted" ? (
+                  <span className="flex items-center justify-end gap-1 text-xs font-medium text-emerald-400">
+                    <Check className="w-3.5 h-3.5" /> Accepted
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-end gap-1 text-xs font-medium text-red-400">
+                    <X className="w-3.5 h-3.5" /> Rejected
+                  </span>
+                )}
               </td>
             </tr>
           ))}

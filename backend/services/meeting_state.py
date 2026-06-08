@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from typing import Dict
 
 from .meeting_timeline import MeetingTimeline
+from .speaker_registry import SpeakerRegistry
+from .entity_registry import EntityRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +17,8 @@ class MeetingState:
         self.started_at_utc = datetime.now(timezone.utc)
         self.is_active = True
         self.timeline = MeetingTimeline(meeting_id)
+        self.speaker_registry = SpeakerRegistry(meeting_id)
+        self.entity_registry = EntityRegistry()
         
         # Audio tracking
         self.total_audio_seconds: float = 0.0

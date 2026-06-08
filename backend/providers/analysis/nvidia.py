@@ -12,13 +12,6 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are a meeting analysis AI. You analyze meeting transcripts and extract structured insights.
 
-Given the meeting transcript so far, extract the following:
-
-1. **Action Items**: Tasks assigned to specific people. Include the owner, the task description, and any mentioned deadline.
-2. **Decisions**: Key decisions made during the meeting.
-3. **Risks**: Blockers, risks, concerns, or dependencies mentioned.
-4. **Summary**: A concise, continuously updated summary of the meeting so far. Write it as 2-5 sentences capturing the key points discussed.
-
 Rules:
 - Only extract information that is explicitly stated or clearly implied in the transcript.
 - Do NOT invent or hallucinate information.
@@ -26,10 +19,7 @@ Rules:
 - For timestamps, use the timestamp from the transcript where the item was mentioned.
 - For deadlines, use "Not specified" if no deadline was mentioned.
 - Keep the summary concise and factual.
-- Respond ONLY with valid JSON. No explanation, no markdown, no code fences.
-
-JSON schema:
-{"action_items": [{"owner": "string", "task": "string", "deadline": "string"}], "decisions": [{"decision": "string", "timestamp": "string"}], "risks": [{"description": "string", "timestamp": "string"}], "summary": "string"}"""
+- Respond ONLY with valid JSON. No explanation, no markdown, no code fences."""
 
 class NVIDIAAnalyzer(AnalyzerProvider):
     """Analyzes meeting transcripts using NVIDIA Build API LLMs."""
@@ -82,21 +72,21 @@ class NVIDIAAnalyzer(AnalyzerProvider):
         return None
 
     async def analyze(self, transcript_text: str) -> Optional[MeetingInsights]:
-        if not transcript_text.strip():
-            return None
-            
+        """Legacy method for full extraction. Use analyze_agent instead."""
+        pass
+        
+    async def analyze_agent(self, agent_prompt: str, json_schema: str) -> Optional[Dict[str, Any]]:
+        """Run a specialized agent prompt."""
         try:
+            full_system_prompt = f"{SYSTEM_PROMPT}\n\nJSON schema to follow strictly:\n{json_schema}"
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": f"Analyze the following meeting transcript:\n\n{transcript_text}",
-                    },
+                    {"role": "system", "content": full_system_prompt},
+                    {"role": "user", "content": agent_prompt},
                 ],
                 temperature=0.1,
-                max_tokens=2048,
+                max_tokens=1024,
             )
 
             content = response.choices[0].message.content
@@ -108,7 +98,7 @@ class NVIDIAAnalyzer(AnalyzerProvider):
                 logger.error(f"Could not extract JSON from LLM response: {content[:500]}")
                 return None
 
-            return MeetingInsights(**parsed)
+            return parsed
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM response as JSON: {e}")

@@ -101,7 +101,7 @@ export default function AnalysisPage() {
   // Combine websocket status with VAD status for the UI
   let displayStatus = isAnalyzing ? status : isSharing ? "connected" : "ready";
   if (displayStatus === "ready" && isAnalyzing) {
-      displayStatus = "connecting";
+      displayStatus = "connecting" as any;
   }
 
   return (

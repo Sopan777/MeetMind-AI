@@ -10,27 +10,47 @@ class ContextBuilder:
     """Builds hierarchical context prompts for the LLM analyzer from the MeetingTimeline."""
     
     @staticmethod
-    def build_extraction_prompt(timeline: MeetingTimeline) -> Optional[str]:
-        """
-        Builds the prompt for Channel 1 (action items, decisions, risks).
-        Uses Tier 1 (recent events) only.
-        """
-        # Get the last N speech events
+    def build_action_prompt(timeline: MeetingTimeline, entities: Optional[list[str]] = None) -> Optional[str]:
+        """Builds the prompt for the Action Item Agent."""
         recent_speech = timeline.get_recent(settings.TIER1_MAX_EVENTS, types=[EventType.SPEECH])
-        
         if not recent_speech:
             return None
             
-        # Optional: could also fetch visual events that occurred within the timeframe of these speech events
-        # For now, just render the transcript
-        
         prompt_lines = ["=== RECENT TRANSCRIPT ==="]
         prompt_lines.append(timeline.get_speech_text(since_seq=recent_speech[0].sequence - 1))
         
+        if entities:
+            prompt_lines.append("\n=== KNOWN ENTITIES ===")
+            prompt_lines.append(f"The following entities/people have been mentioned: {', '.join(entities)}")
+            
         prompt_lines.append("\n=== TASK ===")
-        prompt_lines.append("Extract any NEW action items, decisions, or risks from the recent transcript.")
-        prompt_lines.append("Only extract items that are explicitly stated. Do not invent items.")
+        prompt_lines.append("Extract any NEW Action Items from the recent transcript.")
+        prompt_lines.append("RULES:")
+        prompt_lines.append("1. Only extract tasks that have an explicit or strongly implied owner and action.")
+        prompt_lines.append("2. EVIDENCE REQUIRED: You MUST provide the exact verbatim quote from the transcript that supports this action item. Do not paraphrase the quote.")
+        prompt_lines.append("3. CONFIDENCE SCORE: Provide a confidence score from 0.0 to 1.0 based on how certain you are this is a real task assignment.")
+        return "\n".join(prompt_lines)
+
+    @staticmethod
+    def build_decision_prompt(timeline: MeetingTimeline, entities: Optional[list[str]] = None) -> Optional[str]:
+        """Builds the prompt for the Decision Agent."""
+        recent_speech = timeline.get_recent(settings.TIER1_MAX_EVENTS, types=[EventType.SPEECH])
+        if not recent_speech:
+            return None
+            
+        prompt_lines = ["=== RECENT TRANSCRIPT ==="]
+        prompt_lines.append(timeline.get_speech_text(since_seq=recent_speech[0].sequence - 1))
         
+        if entities:
+            prompt_lines.append("\n=== KNOWN ENTITIES ===")
+            prompt_lines.append(f"The following entities/people have been mentioned: {', '.join(entities)}")
+            
+        prompt_lines.append("\n=== TASK ===")
+        prompt_lines.append("Extract any NEW Decisions made in the recent transcript.")
+        prompt_lines.append("RULES:")
+        prompt_lines.append("1. Only extract firm decisions, not just suggestions or ideas.")
+        prompt_lines.append("2. EVIDENCE REQUIRED: You MUST provide the exact verbatim quote from the transcript that supports this decision. Do not paraphrase the quote.")
+        prompt_lines.append("3. CONFIDENCE SCORE: Provide a confidence score from 0.0 to 1.0 based on how certain you are this is a final decision.")
         return "\n".join(prompt_lines)
         
     @staticmethod

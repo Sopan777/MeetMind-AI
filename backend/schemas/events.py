@@ -27,7 +27,8 @@ class MeetingEvent(BaseModel):
     speech_start_ms: Optional[int] = None
     speech_end_ms: Optional[int] = None
     duration_ms: Optional[int] = None
-    confidence: Optional[float] = None
+    transcription_confidence: Optional[float] = None
+    speaker_confidence: Optional[float] = None
     language: Optional[str] = None
     
     # Visual fields

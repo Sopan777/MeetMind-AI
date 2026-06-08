@@ -49,3 +49,4 @@ backend/__pycache__/
 **/__pycache__/
 *.pyc
 *.db
+backend/local_pyannote/

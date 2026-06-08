@@ -50,7 +50,7 @@ const EMPTY_INSIGHTS: MeetingInsights = {
   summary: "",
 };
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws/analyze";
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000/ws/analyze";
 
 export function useMeetingAnalysis(): UseMeetingAnalysisReturn {
   const [status, setStatus] = useState<"ready" | "connected" | "recording" | "processing" | "reconnecting" | "disconnected">("ready");

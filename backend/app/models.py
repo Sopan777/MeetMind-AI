@@ -55,7 +55,8 @@ class MeetingEvent(Base):
     speech_start_ms = Column(Integer, nullable=True)
     speech_end_ms = Column(Integer, nullable=True)
     duration_ms = Column(Integer, nullable=True)
-    confidence = Column(Float, nullable=True)
+    transcription_confidence = Column(Float, nullable=True)
+    speaker_confidence = Column(Float, nullable=True)
     language = Column(String, nullable=True)
     
     # Visual fields
@@ -73,6 +74,59 @@ class MeetingEvent(Base):
     metadata_json = Column(Text, nullable=True)
 
     meeting = relationship("Meeting", back_populates="events")
+
+class Speaker(Base):
+    __tablename__ = "speakers"
+    id = Column(String, primary_key=True)
+    meeting_id = Column(String, ForeignKey("meetings.id"), nullable=False, index=True)
+    label = Column(String, nullable=False, index=True)
+    display_name = Column(String, nullable=True)
+    color_hex = Column(String, nullable=False)
+    
+    is_enrolled = Column(Boolean, default=False)
+    enrolled_at = Column(DateTime, nullable=True)
+    
+    total_utterances = Column(Integer, default=0)
+    total_speak_secs = Column(Float, default=0.0)
+    first_seen_at = Column(DateTime, nullable=False)
+    last_seen_at = Column(DateTime, nullable=False)
+    
+    # Embedding data
+    centroid_blob = Column(Text, nullable=True) # Assuming JSON/Hex for simplicity over raw bytes in SQLite
+    centroid_dim = Column(Integer, default=256)
+    centroid_samples = Column(Integer, default=0)
+
+class SpeakerEmbedding(Base):
+    __tablename__ = "speaker_embeddings"
+    id = Column(String, primary_key=True)
+    meeting_id = Column(String, ForeignKey("meetings.id"), nullable=False, index=True)
+    speaker_id = Column(String, ForeignKey("speakers.id"), nullable=True, index=True)
+    event_id = Column(String, ForeignKey("meeting_events.id"), nullable=True)
+    
+    timestamp_utc = Column(DateTime, nullable=False)
+    embedding_blob = Column(Text, nullable=False)
+    
+    utterance_dur_ms = Column(Integer, nullable=False)
+    similarity_score = Column(Float, nullable=True)
+    was_overlap = Column(Boolean, default=False)
+    confidence = Column(Float, nullable=True)
+
+class DiarizationResultLog(Base):
+    __tablename__ = "diarization_results"
+    id = Column(String, primary_key=True)
+    meeting_id = Column(String, ForeignKey("meetings.id"), nullable=False, index=True)
+    event_id = Column(String, ForeignKey("meeting_events.id"), nullable=True)
+    
+    raw_segments_json = Column(Text, nullable=False)
+    num_speakers_det = Column(Integer, nullable=False)
+    was_overlap = Column(Boolean, default=False)
+    dominant_speaker = Column(String, nullable=False)
+    
+    resolved_label = Column(String, nullable=False)
+    resolution_sim = Column(Float, nullable=True)
+    
+    inference_ms = Column(Integer, nullable=True)
+    provider_version = Column(String, nullable=True)
 
 
 class AnalyzerSnapshot(Base):
