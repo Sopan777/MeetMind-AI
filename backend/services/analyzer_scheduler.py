@@ -102,55 +102,101 @@ class AnalyzerScheduler:
 
             any_llm_failed = any(isinstance(r, Exception) for r in results)
 
+            extraction_warnings = 0
+
             if action_result and "action_items" in action_result:
                 for new_item in action_result["action_items"]:
-                    if not new_item.get("quote"): continue
+                    if not new_item.get("quote"):
+                        logger.warning(f"Action item dropped (no quote): {new_item.get('task', '<unknown>')}")
+                        extraction_warnings += 1
+                        continue
+                    # Skip re-extraction of already-reviewed items
+                    if any(
+                        e.review_status in ("accepted", "rejected") and
+                        difflib.SequenceMatcher(None, e.task.lower(), new_item.get("task", "").lower()).ratio() > 0.75
+                        for e in self.current_insights.action_items
+                    ):
+                        continue
                     is_duplicate = False
                     for existing in self.current_insights.action_items:
-                        similarity = difflib.SequenceMatcher(None, existing.task.lower(), new_item.get("task", "").lower()).ratio()
-                        if similarity > 0.8:
+                        task_sim = difflib.SequenceMatcher(None, existing.task.lower(), new_item.get("task", "").lower()).ratio()
+                        owner_sim = difflib.SequenceMatcher(None, existing.owner.lower(), new_item.get("owner", "").lower()).ratio()
+                        if task_sim > 0.75 or (task_sim > 0.6 and owner_sim > 0.8):
                             is_duplicate = True
-                            if new_item.get("confidence", 0) > existing.confidence:
-                                existing.confidence = new_item.get("confidence", 0)
-                                existing.quote = new_item.get("quote", existing.quote)
+                            new_conf = min(max(new_item.get("confidence", 0), 0.0), 1.0)
+                            if new_conf > existing.confidence:
+                                existing.confidence = new_conf
+                            new_quote = new_item.get("quote", "")
+                            if new_quote and new_quote not in existing.quote:
+                                existing.quote = existing.quote + " | " + new_quote
                             break
                     if not is_duplicate:
-                        self.current_insights.action_items.append(ActionItem(**new_item))
+                        try:
+                            item = new_item.copy()
+                            item["confidence"] = min(max(float(item.get("confidence", 0.5)), 0.0), 1.0)
+                            self.current_insights.action_items.append(ActionItem(**item))
+                        except Exception as e:
+                            logger.warning(f"Skipping malformed action item: {e} — data: {new_item}")
+                            extraction_warnings += 1
 
             if decision_result and "decisions" in decision_result:
                 for new_item in decision_result["decisions"]:
-                    if not new_item.get("quote"): continue
+                    if not new_item.get("quote"):
+                        logger.warning(f"Decision dropped (no quote): {new_item.get('decision', '<unknown>')}")
+                        extraction_warnings += 1
+                        continue
                     is_duplicate = False
                     for existing in self.current_insights.decisions:
                         similarity = difflib.SequenceMatcher(None, existing.decision.lower(), new_item.get("decision", "").lower()).ratio()
-                        if similarity > 0.8:
+                        if similarity > 0.75:
                             is_duplicate = True
-                            if new_item.get("confidence", 0) > existing.confidence:
-                                existing.confidence = new_item.get("confidence", 0)
+                            new_conf = min(max(new_item.get("confidence", 0), 0.0), 1.0)
+                            if new_conf > existing.confidence:
+                                existing.confidence = new_conf
                             break
                     if not is_duplicate:
-                        self.current_insights.decisions.append(Decision(**new_item))
+                        try:
+                            item = new_item.copy()
+                            item["confidence"] = min(max(float(item.get("confidence", 0.5)), 0.0), 1.0)
+                            self.current_insights.decisions.append(Decision(**item))
+                        except Exception as e:
+                            logger.warning(f"Skipping malformed decision: {e} — data: {new_item}")
+                            extraction_warnings += 1
 
             if risk_result and "risks" in risk_result:
                 for new_item in risk_result["risks"]:
-                    if not new_item.get("quote"): continue
+                    if not new_item.get("quote"):
+                        logger.warning(f"Risk dropped (no quote): {new_item.get('description', '<unknown>')}")
+                        extraction_warnings += 1
+                        continue
                     is_duplicate = False
                     for existing in self.current_insights.risks:
                         similarity = difflib.SequenceMatcher(None, existing.description.lower(), new_item.get("description", "").lower()).ratio()
-                        if similarity > 0.8:
+                        if similarity > 0.75:
                             is_duplicate = True
-                            if new_item.get("confidence", 0) > existing.confidence:
-                                existing.confidence = new_item.get("confidence", 0)
+                            new_conf = min(max(new_item.get("confidence", 0), 0.0), 1.0)
+                            if new_conf > existing.confidence:
+                                existing.confidence = new_conf
                             break
                     if not is_duplicate:
-                        self.current_insights.risks.append(Risk(**new_item))
+                        try:
+                            item = new_item.copy()
+                            item["confidence"] = min(max(float(item.get("confidence", 0.5)), 0.0), 1.0)
+                            self.current_insights.risks.append(Risk(**item))
+                        except Exception as e:
+                            logger.warning(f"Skipping malformed risk: {e} — data: {new_item}")
+                            extraction_warnings += 1
 
             if summary_result and "summary" in summary_result:
                 self.current_insights.summary = summary_result["summary"]
 
+            insights_payload = self.current_insights.model_dump()
+            if extraction_warnings:
+                insights_payload["extraction_warnings"] = extraction_warnings
+
             await websocket.send_json({
                 "type": "insights",
-                "data": self.current_insights.model_dump(),
+                "data": insights_payload,
             })
 
             if any_llm_failed:

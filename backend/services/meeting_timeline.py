@@ -32,9 +32,14 @@ class MeetingTimeline:
         
     def append(self, event: MeetingEvent) -> None:
         """Appends an event to the timeline."""
-        # Ensure sequence is correct
         event.sequence = self.total_events
-        
+
+        if self.total_events >= self.max_events and self.total_events % self.max_events == 0:
+            logger.warning(
+                f"Meeting {self.meeting_id}: timeline ring buffer full at {self.total_events} events — "
+                "oldest events are being discarded. Long-meeting context may be incomplete."
+            )
+
         self.events.append(event)
         self.total_events += 1
         

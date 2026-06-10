@@ -54,20 +54,16 @@ class NVIDIAAnalyzer(AnalyzerProvider):
             except json.JSONDecodeError:
                 pass
 
-        # Try 3: Find first { ... } block using brace matching
+        # Try 3: Use raw_decode to find first valid JSON object — correctly handles
+        # braces inside string values (e.g. {"task": "Implement {facade} pattern"})
         start = text.find("{")
         if start != -1:
-            depth = 0
-            for i in range(start, len(text)):
-                if text[i] == "{":
-                    depth += 1
-                elif text[i] == "}":
-                    depth -= 1
-                    if depth == 0:
-                        try:
-                            return json.loads(text[start : i + 1])
-                        except json.JSONDecodeError:
-                            break
+            decoder = json.JSONDecoder()
+            try:
+                obj, _ = decoder.raw_decode(text, start)
+                return obj
+            except json.JSONDecodeError:
+                pass
 
         return None
 
