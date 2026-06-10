@@ -39,9 +39,9 @@ class Settings(BaseSettings):
     TIMELINE_MAX_EVENTS: int = 5000
 
     # Analyzer scheduler
-    EXTRACTION_UTTERANCE_THRESHOLD: int = 15
-    SUMMARY_UTTERANCE_THRESHOLD: int = 45
-    ANALYZER_MIN_INTERVAL_SECONDS: int = 20
+    EXTRACTION_UTTERANCE_THRESHOLD: int = 3
+    SUMMARY_UTTERANCE_THRESHOLD: int = 10
+    ANALYZER_MIN_INTERVAL_SECONDS: int = 5
 
     # Context builder
     TIER1_MAX_EVENTS: int = 20

@@ -205,8 +205,8 @@ class AnalyzerScheduler:
                     "message": "One or more analysis agents failed. Results may be incomplete.",
                 })
 
-            if state.persistence:
-                asyncio.create_task(state.persistence.save_insights(self.meeting_id, self.current_insights))
+            if persistence:
+                asyncio.create_task(persistence.save_insights(self.meeting_id, self.current_insights))
 
             insight_event = MeetingEvent(
                 id=str(uuid.uuid4()),
