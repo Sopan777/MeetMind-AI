@@ -83,7 +83,12 @@ export function useMeetingAnalysis(): UseMeetingAnalysisReturn {
         setTranscript((prev) => [...prev, data]);
       },
       onInsights: (data) => {
-        setInsights(data);
+        setInsights((prev) => ({
+          action_items: data.action_items ?? prev.action_items,
+          decisions: data.decisions ?? prev.decisions,
+          risks: data.risks ?? prev.risks,
+          summary: data.summary ?? prev.summary,
+        }));
       },
       onStatus: (newStatus) => {
         setStatus(newStatus as MeetingStatus);

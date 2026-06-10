@@ -24,6 +24,7 @@ export default function AnalysisPage() {
     connect,
     disconnect,
     sendUtterance,
+    requestAnalysis,
   } = useMeetingAnalysis();
 
   const {
@@ -113,6 +114,7 @@ export default function AnalysisPage() {
         onStopSharing={handleStopSharing}
         onStartAnalysis={handleStartAnalysis}
         onStopAnalysis={handleStopAnalysis}
+        onAnalyzeNow={requestAnalysis}
       />
 
       {/* Dropped frames warning */}

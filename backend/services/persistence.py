@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
-from app.models import MeetingEvent, Speaker, SpeakerEmbedding, DiarizationResultLog
+from app.models import MeetingEvent, Speaker, SpeakerEmbedding, DiarizationResultLog, ActionItem as DBActionItem, Decision as DBDecision, Risk as DBRisk
 from schemas.analysis import MeetingInsights
 from schemas.transcription import TranscriptionResult
 
@@ -92,7 +92,51 @@ class PersistenceService:
             await self.db.rollback()
             logger.error(f"Failed to persist speaker profile: {e}")
 
-    async def save_speaker_embedding(self, meeting_id: str, event_id: str, embedding, speaker_label: str, duration_ms: int) -> None:
+    async def save_insights(self, meeting_id: str, insights) -> None:
+        """Persists extracted insights (action items, decisions, risks) to the database."""
+        import uuid as _uuid
+        try:
+            for item in insights.action_items:
+                db_item = DBActionItem(
+                    id=str(_uuid.uuid4()),
+                    meeting_id=meeting_id,
+                    task=item.task,
+                    owner=item.owner,
+                    deadline=item.deadline,
+                    quote=item.quote,
+                    confidence=item.confidence,
+                    review_status=item.review_status,
+                )
+                self.db.add(db_item)
+
+            for item in insights.decisions:
+                db_item = DBDecision(
+                    id=str(_uuid.uuid4()),
+                    meeting_id=meeting_id,
+                    decision=item.decision,
+                    timestamp=item.timestamp,
+                    quote=item.quote,
+                    confidence=item.confidence,
+                )
+                self.db.add(db_item)
+
+            for item in insights.risks:
+                db_item = DBRisk(
+                    id=str(_uuid.uuid4()),
+                    meeting_id=meeting_id,
+                    description=item.description,
+                    timestamp=item.timestamp,
+                    quote=item.quote,
+                    confidence=item.confidence,
+                )
+                self.db.add(db_item)
+
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to persist insights: {e}")
+
+
         """Saves a raw embedding for an utterance."""
         import json
         

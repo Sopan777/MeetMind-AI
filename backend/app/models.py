@@ -171,30 +171,29 @@ class ActionItem(Base):
     task = Column(Text, nullable=False)
     owner = Column(String, nullable=False)
     deadline = Column(String, nullable=False)
-    status = Column(String, default="todo")
-    priority = Column(String, default="medium")
+    quote = Column(Text, nullable=True)
+    confidence = Column(Float, nullable=True)
+    review_status = Column(String, default="pending")
 
 
 class Decision(Base):
     __tablename__ = "decisions"
     id = Column(String, primary_key=True)
     meeting_id = Column(String, ForeignKey("meetings.id"), nullable=False, index=True)
-    title = Column(String, nullable=False)
-    description = Column(Text, nullable=False)
-    decided_by = Column(String, nullable=False)
-    impact = Column(String, default="medium")
+    decision = Column(Text, nullable=False)
+    timestamp = Column(String, nullable=True)
+    quote = Column(Text, nullable=True)
+    confidence = Column(Float, nullable=True)
 
 
 class Risk(Base):
     __tablename__ = "risks"
     id = Column(String, primary_key=True)
     meeting_id = Column(String, ForeignKey("meetings.id"), nullable=False, index=True)
-    title = Column(String, nullable=False)
     description = Column(Text, nullable=False)
-    severity = Column(String, default="medium")
-    impact = Column(Text, nullable=True)
-    recommendation = Column(Text, nullable=True)
-    detected_phrase = Column(String, nullable=True)
+    timestamp = Column(String, nullable=True)
+    quote = Column(Text, nullable=True)
+    confidence = Column(Float, nullable=True)
 
 
 class Notification(Base):

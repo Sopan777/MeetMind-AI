@@ -1,8 +1,31 @@
+export interface ActionItem {
+  owner: string;
+  task: string;
+  deadline: string;
+  quote: string;
+  confidence: number;
+  review_status: "pending" | "accepted" | "rejected";
+}
+
+export interface Decision {
+  decision: string;
+  timestamp: string;
+  quote: string;
+  confidence: number;
+}
+
+export interface Risk {
+  description: string;
+  timestamp: string;
+  quote: string;
+  confidence: number;
+}
+
 export interface WSClientOptions {
   url: string;
   meetingId: string;
   onTranscript: (data: { timestamp: string; speaker: string; text: string }) => void;
-  onInsights: (data: { action_items: any[]; decisions: any[]; risks: any[]; summary: string }) => void;
+  onInsights: (data: { action_items: ActionItem[]; decisions: Decision[]; risks: Risk[]; summary: string }) => void;
   onStatus: (status: string) => void;
   onDroppedFrame: () => void;
   onError: (error: string) => void;
@@ -21,6 +44,7 @@ export class MeetingWebSocketClient {
   private reconnectDelays = [1000, 2000, 4000, 8000, 10000];
   
   private heartbeatInterval: NodeJS.Timeout | null = null;
+  private pongTimeout: NodeJS.Timeout | null = null;
   private pendingUtterances: Array<{ buffer: ArrayBuffer; speechStartMs: number; speechEndMs: number }> = [];
 
   constructor(options: WSClientOptions) {
@@ -78,7 +102,11 @@ export class MeetingWebSocketClient {
       } else if (data.type === 'error' && data.message) {
         this.options.onError(data.message);
       } else if (data.type === 'pong') {
-        // Heartbeat ack, can track latency here if needed
+        // Clear the pong timeout — connection is alive
+        if (this.pongTimeout) {
+          clearTimeout(this.pongTimeout);
+          this.pongTimeout = null;
+        }
       }
     } catch (e) {
       console.error('Failed to parse WebSocket message:', e);
@@ -124,6 +152,11 @@ export class MeetingWebSocketClient {
     this.heartbeatInterval = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.sendControlMessage('ping');
+        // Trigger reconnect if no pong arrives within 30s
+        this.pongTimeout = setTimeout(() => {
+          console.warn('Pong timeout — connection appears hung, reconnecting');
+          this.ws?.close();
+        }, 30000);
       }
     }, 15000);
   }
@@ -132,6 +165,10 @@ export class MeetingWebSocketClient {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
+    }
+    if (this.pongTimeout) {
+      clearTimeout(this.pongTimeout);
+      this.pongTimeout = null;
     }
   }
 

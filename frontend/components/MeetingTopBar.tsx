@@ -12,6 +12,7 @@ interface MeetingTopBarProps {
   onStopSharing: () => void;
   onStartAnalysis: () => void;
   onStopAnalysis: () => void;
+  onAnalyzeNow?: () => void;
 }
 
 const statusConfig: Record<
@@ -36,6 +37,7 @@ export function MeetingTopBar({
   onStopSharing,
   onStartAnalysis,
   onStopAnalysis,
+  onAnalyzeNow,
 }: MeetingTopBarProps) {
   const { color, label } = statusConfig[status] || statusConfig.ready;
 
@@ -107,23 +109,44 @@ export function MeetingTopBar({
         )}
 
         {isAnalyzing ? (
-          <Button variant="destructive" size="sm" onClick={onStopAnalysis}>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="mr-2"
-            >
-              <rect x="6" y="6" width="12" height="12" rx="2" />
-            </svg>
-            Stop Analysis
-          </Button>
+          <>
+            {onAnalyzeNow && (
+              <Button variant="outline" size="sm" onClick={onAnalyzeNow}>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="mr-2"
+                >
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                Analyze Now
+              </Button>
+            )}
+            <Button variant="destructive" size="sm" onClick={onStopAnalysis}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="mr-2"
+              >
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+              Stop Analysis
+            </Button>
+          </>
         ) : (
           <Button
             variant="default"

@@ -148,6 +148,13 @@ async def websocket_analyze(websocket: WebSocket):
         except Exception as e:
             logger.error(f"Failed to persist embedding for event {eid}: {e}")
 
+    async def bg_save_insights(mid, insights):
+        try:
+            async with AsyncSessionLocal() as session:
+                await PersistenceService(session).save_insights(mid, insights)
+        except Exception as e:
+            logger.error(f"Failed to persist insights for meeting {mid}: {e}")
+
     def _spawn(coro):
         task = asyncio.create_task(coro)
         _pending_tasks.add(task)
@@ -286,7 +293,7 @@ async def websocket_analyze(websocket: WebSocket):
                             })
 
                             scheduler = schedulers[current_meeting_id]
-                            scheduler.on_speech_event(state, analyzer_provider, websocket, None)
+                            scheduler.on_speech_event(state, analyzer_provider, websocket, bg_save_insights)
 
                         except Exception as frame_err:
                             # C-3: Log but continue — one bad frame must not end the session
@@ -298,7 +305,7 @@ async def websocket_analyze(websocket: WebSocket):
                     elif msg.get("type") == "analyze_now":
                         state = await session_manager.get_session(current_meeting_id)
                         scheduler = schedulers[current_meeting_id]
-                        scheduler.force_trigger(state, analyzer_provider, websocket, None)
+                        scheduler.force_trigger(state, analyzer_provider, websocket, bg_save_insights)
 
                     elif msg.get("type") == "stop":
                         logger.info(f"Client requested stop for meeting {current_meeting_id}")
