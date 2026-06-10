@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import models, schemas
 
-router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
+router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
 @router.get("/overview", response_model=schemas.AnalyticsOverview)
@@ -13,9 +14,7 @@ def get_overview(db: Session = Depends(get_db)):
     total_actions = db.query(models.ActionItem).count()
     total_decisions = db.query(models.Decision).count()
     total_risks = db.query(models.Risk).count()
-    total_duration = sum(
-        m.duration for m in db.query(models.Meeting).all()
-    )
+    total_duration = db.query(func.sum(models.Meeting.duration)).scalar() or 0
     return {
         "total_meetings": total_meetings,
         "total_action_items": total_actions,

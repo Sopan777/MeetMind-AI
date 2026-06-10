@@ -20,6 +20,7 @@ export default function AnalysisPage() {
     status,
     transcript,
     insights,
+    droppedFrames,
     connect,
     disconnect,
     sendUtterance,
@@ -99,10 +100,7 @@ export default function AnalysisPage() {
   }, [stopVAD, disconnect]);
 
   // Combine websocket status with VAD status for the UI
-  let displayStatus = isAnalyzing ? status : isSharing ? "connected" : "ready";
-  if (displayStatus === "ready" && isAnalyzing) {
-      displayStatus = "connecting" as any;
-  }
+  const displayStatus = isAnalyzing ? status : isSharing ? "connected" : "ready";
 
   return (
     <div className="flex flex-col h-screen">
@@ -116,6 +114,16 @@ export default function AnalysisPage() {
         onStartAnalysis={handleStartAnalysis}
         onStopAnalysis={handleStopAnalysis}
       />
+
+      {/* Dropped frames warning */}
+      {droppedFrames > 0 && (
+        <div className="bg-orange-900/30 border-b border-orange-700/50 px-6 py-2.5 text-sm text-orange-200 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          {droppedFrames} audio {droppedFrames === 1 ? "frame was" : "frames were"} dropped during reconnection. Transcript may have gaps.
+        </div>
+      )}
 
       {/* Audio warning */}
       {audioWarning && (

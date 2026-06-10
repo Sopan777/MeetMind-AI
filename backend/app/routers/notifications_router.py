@@ -5,7 +5,7 @@ from .. import models, schemas
 import asyncio
 import json
 
-router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
+router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 
 @router.get("/", response_model=list[schemas.NotificationResponse])

@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 from datetime import datetime
+import json
 
 
 # --- Auth ---
@@ -45,7 +46,15 @@ class MeetingResponse(BaseModel):
     status: str
     type: str
     quality_score: int
-    participants: str  # JSON string
+    participants: list[str]
+
+    @field_validator("participants", mode="before")
+    @classmethod
+    def parse_participants(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
+
     class Config:
         from_attributes = True
 

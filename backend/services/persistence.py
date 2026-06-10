@@ -1,7 +1,7 @@
 import uuid
 import logging
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
@@ -106,7 +106,7 @@ class PersistenceService:
             meeting_id=meeting_id,
             speaker_id=speaker_id,
             event_id=event_id,
-            timestamp_utc=datetime.utcnow(),
+            timestamp_utc=datetime.now(timezone.utc),
             embedding_blob=json.dumps(embedding.tolist()) if embedding is not None else "[]",
             utterance_dur_ms=duration_ms
         )

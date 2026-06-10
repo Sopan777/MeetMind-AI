@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import models, schemas
 
-router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
+router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
 @router.get("/", response_model=list[schemas.ActionItemResponse])

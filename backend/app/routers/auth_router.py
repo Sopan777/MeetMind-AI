@@ -5,7 +5,7 @@ from ..database import get_db
 from .. import models, schemas
 from ..auth import hash_password, verify_password, create_access_token, get_current_user
 
-router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/signup", response_model=schemas.Token, status_code=201)

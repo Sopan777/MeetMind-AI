@@ -6,7 +6,7 @@ from ..database import get_db
 from .. import models, schemas
 from ..auth import get_current_user
 
-router = APIRouter(prefix="/api/meetings", tags=["Meetings"])
+router = APIRouter(prefix="/meetings", tags=["Meetings"])
 
 
 @router.get("/", response_model=list[schemas.MeetingResponse])
@@ -44,14 +44,8 @@ def get_meeting(meeting_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{meeting_id}/upload")
 async def upload_file(meeting_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Upload a meeting recording file."""
-    meeting = db.query(models.Meeting).filter(models.Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Meeting not found")
-    # In production, save to S3. For now, just record the filename.
-    meeting.file_path = file.filename
-    db.commit()
-    return {"filename": file.filename, "size": file.size, "status": "uploaded"}
+    """Upload a meeting recording file. Storage backend not yet implemented."""
+    raise HTTPException(status_code=501, detail="File storage not implemented. Configure S3 or local storage first.")
 
 
 @router.get("/{meeting_id}/transcript", response_model=list[schemas.TranscriptResponse])

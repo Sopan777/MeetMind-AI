@@ -32,11 +32,14 @@ interface MeetingInsights {
   summary: string;
 }
 
+type MeetingStatus = "ready" | "connecting" | "connected" | "recording" | "processing" | "reconnecting" | "disconnected";
+
 interface UseMeetingAnalysisReturn {
-  status: "ready" | "connected" | "recording" | "processing" | "reconnecting" | "disconnected";
+  status: MeetingStatus;
   transcript: TranscriptSegment[];
   insights: MeetingInsights;
   isConnected: boolean;
+  droppedFrames: number;
   connect: (meetingId?: string) => void;
   disconnect: () => void;
   sendUtterance: (wavBuffer: ArrayBuffer, speechStartMs: number, speechEndMs: number) => void;
@@ -50,13 +53,14 @@ const EMPTY_INSIGHTS: MeetingInsights = {
   summary: "",
 };
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000/ws/analyze";
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8001/ws/analyze";
 
 export function useMeetingAnalysis(): UseMeetingAnalysisReturn {
-  const [status, setStatus] = useState<"ready" | "connected" | "recording" | "processing" | "reconnecting" | "disconnected">("ready");
+  const [status, setStatus] = useState<MeetingStatus>("ready");
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([]);
   const [insights, setInsights] = useState<MeetingInsights>(EMPTY_INSIGHTS);
-  
+  const [droppedFrames, setDroppedFrames] = useState(0);
+
   const clientRef = useRef<MeetingWebSocketClient | null>(null);
 
   const cleanup = useCallback(() => {
@@ -82,11 +86,14 @@ export function useMeetingAnalysis(): UseMeetingAnalysisReturn {
         setInsights(data);
       },
       onStatus: (newStatus) => {
-        setStatus(newStatus as any);
+        setStatus(newStatus as MeetingStatus);
+      },
+      onDroppedFrame: () => {
+        setDroppedFrames((n) => n + 1);
       },
       onError: (err) => {
         console.error("Analysis Error:", err);
-      }
+      },
     });
 
     clientRef.current = client;
@@ -97,6 +104,7 @@ export function useMeetingAnalysis(): UseMeetingAnalysisReturn {
     cleanup();
     setTranscript([]);
     setInsights(EMPTY_INSIGHTS);
+    setDroppedFrames(0);
   }, [cleanup]);
 
   const sendUtterance = useCallback((wavBuffer: ArrayBuffer, speechStartMs: number, speechEndMs: number) => {
@@ -111,7 +119,6 @@ export function useMeetingAnalysis(): UseMeetingAnalysisReturn {
     }
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       cleanup();
@@ -122,6 +129,7 @@ export function useMeetingAnalysis(): UseMeetingAnalysisReturn {
     status,
     transcript,
     insights,
+    droppedFrames,
     isConnected: status === "connected" || status === "recording" || status === "processing",
     connect,
     disconnect,

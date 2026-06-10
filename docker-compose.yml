@@ -8,21 +8,39 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - NEXT_PUBLIC_API_URL=http://backend:8001
     depends_on:
       - backend
+
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=meetingmind
+      - POSTGRES_PASSWORD=meetingmind_pass
+      - POSTGRES_DB=meetingmind
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "8001:8001"
     environment:
-      - DATABASE_URL=sqlite:///./meetingmind.db
-      - SECRET_KEY=meetingmind-production-secret-key
+      - DATABASE_URL=postgresql+asyncpg://meetingmind:meetingmind_pass@postgres:5432/meetingmind
+      - SYNC_DATABASE_URL=postgresql+psycopg2://meetingmind:meetingmind_pass@postgres:5432/meetingmind
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set in .env or environment}
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:3000
+      - DIARIZATION_SERVICE_URL=http://host.docker.internal:8002
+    depends_on:
+      - postgres
     volumes:
       - backend-data:/app/uploads
 
 volumes:
   backend-data:
+  postgres-data:

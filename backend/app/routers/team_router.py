@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from ..database import get_db
 
-router = APIRouter(prefix="/api/team", tags=["Team"])
+router = APIRouter(prefix="/team", tags=["Team"])
 
 
 @router.get("/members")

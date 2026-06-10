@@ -17,18 +17,19 @@ from .base import DiarizationProvider
 
 logger = logging.getLogger(__name__)
 
-DIARIZATION_SERVICE_URL = "http://127.0.0.1:8001"
-
 
 class PyannoteDiarizationProvider(DiarizationProvider):
     """
     Diarization provider that calls the standalone pyannote microservice over HTTP.
     The microservice runs in its own Python 3.12 + pyannote.audio 3.1.1 environment.
+    Default port is 8002 (configured via DIARIZATION_SERVICE_URL env var) to avoid
+    clashing with the main backend on port 8001.
     """
 
     def __init__(self):
         self.device = settings.DIARIZATION_DEVICE
-        self.service_url = DIARIZATION_SERVICE_URL
+        # H-3: Use env-configured URL, not a hardcoded constant
+        self.service_url = settings.DIARIZATION_SERVICE_URL
         self.version = "pyannote-3.1-http"
         self._client: Optional[httpx.AsyncClient] = None
         self._available: Optional[bool] = None  # None = not checked yet

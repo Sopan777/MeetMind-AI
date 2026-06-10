@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   // Required for ONNX Runtime WASM and VAD model files
   async headers() {
     return [

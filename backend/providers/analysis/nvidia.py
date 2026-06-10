@@ -72,8 +72,24 @@ class NVIDIAAnalyzer(AnalyzerProvider):
         return None
 
     async def analyze(self, transcript_text: str) -> Optional[MeetingInsights]:
-        """Legacy method for full extraction. Use analyze_agent instead."""
-        pass
+        """Full transcript analysis — delegates to the agent pipeline."""
+        schema = json.dumps({
+            "action_items": [{"owner": "string", "task": "string", "deadline": "string", "evidence": "string", "confidence": 0.0}],
+            "decisions": [{"decision": "string", "timestamp": "string", "evidence": "string", "confidence": 0.0}],
+            "risks": [{"description": "string", "severity": "low|medium|high", "timestamp": "string"}],
+            "summary": "string",
+        })
+        result = await self.analyze_agent(
+            f"Analyze the following meeting transcript:\n\n{transcript_text}",
+            schema,
+        )
+        if result is None:
+            return None
+        try:
+            return MeetingInsights(**result)
+        except Exception as e:
+            logger.error(f"Failed to parse analyze() result into MeetingInsights: {e}")
+            return None
         
     async def analyze_agent(self, agent_prompt: str, json_schema: str) -> Optional[Dict[str, Any]]:
         """Run a specialized agent prompt."""

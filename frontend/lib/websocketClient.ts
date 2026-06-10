@@ -4,6 +4,7 @@ export interface WSClientOptions {
   onTranscript: (data: { timestamp: string; speaker: string; text: string }) => void;
   onInsights: (data: { action_items: any[]; decisions: any[]; risks: any[]; summary: string }) => void;
   onStatus: (status: string) => void;
+  onDroppedFrame: () => void;
   onError: (error: string) => void;
 }
 
@@ -146,7 +147,7 @@ export class MeetingWebSocketClient {
   public sendUtterance(wavBuffer: ArrayBuffer, speechStartMs: number, speechEndMs: number) {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.sequence++;
-      
+
       // 1. Send metadata frame
       this.ws.send(JSON.stringify({
         type: 'audio',
@@ -155,16 +156,17 @@ export class MeetingWebSocketClient {
         speech_start_ms: speechStartMs,
         speech_end_ms: speechEndMs
       }));
-      
+
       // 2. Send binary audio frame
       this.ws.send(wavBuffer);
     } else {
       // Queue it if we're disconnected
       this.pendingUtterances.push({ buffer: wavBuffer, speechStartMs, speechEndMs });
-      
-      // Keep queue manageable (drop oldest if too many)
+
+      // L-2: Notify caller when oldest frames are silently dropped so the UI can warn
       if (this.pendingUtterances.length > 20) {
         this.pendingUtterances.shift();
+        this.options.onDroppedFrame();
       }
     }
   }
