@@ -206,7 +206,7 @@ class AnalyzerScheduler:
                 })
 
             if persistence:
-                asyncio.create_task(persistence.save_insights(self.meeting_id, self.current_insights))
+                asyncio.create_task(persistence(self.meeting_id, self.current_insights))
 
             insight_event = MeetingEvent(
                 id=str(uuid.uuid4()),

@@ -55,20 +55,25 @@ REST API  (FastAPI, mounted at /api)
 
 ## Quick start
 
-### 1. Set up environment
+### Prerequisites
+
+- Python 3.12 (3.13 also works)
+- Node.js 18+
+- API keys: [Groq](https://console.groq.com) (free) + [NVIDIA Build](https://build.nvidia.com)
+
+### 1. Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and fill in the required values:
+Generate a secret key and paste it into `.env`:
 
-```bash
-# Generate a secure secret key
+```bash 
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-Minimum required keys in `.env`:
+Minimum required entries in `.env`:
 
 ```env
 SECRET_KEY=<generated above>
@@ -76,30 +81,46 @@ GROQ_API_KEY=<from console.groq.com — free tier works>
 NVIDIA_API_KEY=<from build.nvidia.com>
 ```
 
-### 2. Backend
+### 2. Backend — create venv and install dependencies
 
 ```bash
 cd backend
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+# macOS / Linux
+source venv/bin/activate
+
 pip install -r requirements.txt
+```
+
+### 3. Start the backend
+
+```bash
+cd backend
+# activate venv first (see step 2), then:
 uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
-Runs on http://localhost:8001  
-API docs at http://localhost:8001/api/docs
+Backend API docs: http://localhost:8001/api/docs
 
-### 3. Frontend
+### 4. Start the frontend
 
 ```bash
 cd frontend
-npm install
+npm install   # first time only
 npm run dev
 ```
 
 Runs on http://localhost:3000
 
-### 4. Open the app
+### 5. Open the app
 
-Go to http://localhost:3000, click **Start Meeting Analysis**, share your screen (check "Share tab audio" in the browser dialog), then click **Start Analysis**.
+1. Go to http://localhost:3000
+2. Click **Start Meeting Analysis**
+3. Click **Start Analysis**, then share your screen — check **"Share tab audio"** in the browser dialog
+4. Speak; the transcript and insights panels update live
 
 ## Configuration
 
