@@ -45,7 +45,6 @@ async def lifespan(app: FastAPI):
     from app.database import Base
     from app import models  # noqa: F401 — ensure all models are registered
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables verified/created.")
     

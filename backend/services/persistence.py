@@ -35,6 +35,8 @@ class PersistenceService:
             raise
 
     async def save_event(self, event) -> None:
+        # Ensure the parent Meeting row exists before inserting the event
+        await self.save_meeting(event.meeting_id)
         db_event = MeetingEvent(
             id=event.id,
             meeting_id=event.meeting_id,
