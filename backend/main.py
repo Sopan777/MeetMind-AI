@@ -45,6 +45,7 @@ async def lifespan(app: FastAPI):
     from app.database import Base
     from app import models  # noqa: F401 — ensure all models are registered
     async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables verified/created.")
     
@@ -171,6 +172,12 @@ async def websocket_analyze(websocket: WebSocket):
                     if msg.get("type") == "start" and msg.get("meeting_id"):
                         current_meeting_id = msg["meeting_id"]
                         await session_manager.get_session(current_meeting_id)
+                        # Create the Meeting row before any events are saved (satisfies FK constraint)
+                        async with AsyncSessionLocal() as _sess:
+                            await PersistenceService(_sess).save_meeting(
+                                current_meeting_id,
+                                title=msg.get("title", "Live Recording"),
+                            )
                         if current_meeting_id not in schedulers:
                             schedulers[current_meeting_id] = AnalyzerScheduler(current_meeting_id)
                         await websocket.send_json({"type": "status", "status": "connected"})

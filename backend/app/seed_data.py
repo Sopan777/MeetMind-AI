@@ -19,6 +19,7 @@ def seed_database(db: Session):
         role="Admin",
     )
     db.add(user)
+    db.flush()
 
     # Meetings
     meetings_data = [
@@ -33,6 +34,7 @@ def seed_database(db: Session):
     ]
     for mid, title, date, dur, status, mtype, score, parts in meetings_data:
         db.add(models.Meeting(id=mid, title=title, date=date, duration=dur, status=status, type=mtype, quality_score=score, participants=json.dumps(parts), user_id="user-1"))
+    db.flush()
 
     # Transcript for meeting-1
     transcript_data = [
@@ -52,39 +54,39 @@ def seed_database(db: Session):
 
     # Action Items
     action_items = [
-        ("ai-1", "meeting-1", "Complete API integration for payment gateway", "Mike Rodriguez", "2024-12-20", "in-progress", "critical"),
-        ("ai-2", "meeting-1", "Update design system documentation", "Sarah Kim", "2024-12-18", "todo", "high"),
-        ("ai-3", "meeting-1", "Fix authentication flow bug on mobile", "Priya Patel", "2024-12-15", "review", "high"),
-        ("ai-4", "meeting-1", "Set up TypeScript strict mode for frontend", "Sarah Kim", "2024-12-22", "todo", "medium"),
-        ("ai-5", "meeting-2", "Prepare client onboarding materials", "Emma Wilson", "2024-12-16", "completed", "medium"),
-        ("ai-6", "meeting-2", "Schedule follow-up demo with Acme Corp", "David Park", "2024-12-19", "in-progress", "high"),
-        ("ai-7", "meeting-3", "Deploy hotfix for production API", "Mike Rodriguez", "2024-12-09", "completed", "critical"),
-        ("ai-8", "meeting-4", "Submit revised Q4 budget proposal", "Lisa Wang", "2024-12-14", "review", "high"),
-        ("ai-9", "meeting-5", "Create product roadmap presentation", "Alex Chen", "2024-12-21", "in-progress", "medium"),
-        ("ai-10", "meeting-6", "Build reusable component library", "David Park", "2024-12-25", "todo", "medium"),
+        ("ai-1", "meeting-1", "Complete API integration for payment gateway", "Mike Rodriguez", "2024-12-20"),
+        ("ai-2", "meeting-1", "Update design system documentation", "Sarah Kim", "2024-12-18"),
+        ("ai-3", "meeting-1", "Fix authentication flow bug on mobile", "Priya Patel", "2024-12-15"),
+        ("ai-4", "meeting-1", "Set up TypeScript strict mode for frontend", "Sarah Kim", "2024-12-22"),
+        ("ai-5", "meeting-2", "Prepare client onboarding materials", "Emma Wilson", "2024-12-16"),
+        ("ai-6", "meeting-2", "Schedule follow-up demo with Acme Corp", "David Park", "2024-12-19"),
+        ("ai-7", "meeting-3", "Deploy hotfix for production API", "Mike Rodriguez", "2024-12-09"),
+        ("ai-8", "meeting-4", "Submit revised Q4 budget proposal", "Lisa Wang", "2024-12-14"),
+        ("ai-9", "meeting-5", "Create product roadmap presentation", "Alex Chen", "2024-12-21"),
+        ("ai-10", "meeting-6", "Build reusable component library", "David Park", "2024-12-25"),
     ]
-    for aid, mid, task, owner, deadline, status, priority in action_items:
-        db.add(models.ActionItem(id=aid, meeting_id=mid, task=task, owner=owner, deadline=deadline, status=status, priority=priority))
+    for aid, mid, task, owner, deadline in action_items:
+        db.add(models.ActionItem(id=aid, meeting_id=mid, task=task, owner=owner, deadline=deadline))
 
     # Decisions
     decisions_data = [
-        ("d-1", "meeting-1", "Migrate to microservices architecture", "Team agreed to break the monolith into microservices for the payment module.", "Alex Chen", "high"),
-        ("d-2", "meeting-1", "Adopt TypeScript for all new frontend code", "All new components and features will use TypeScript with strict mode.", "Sarah Kim", "medium"),
-        ("d-3", "meeting-4", "Delay Q4 launch by 2 weeks", "Additional time needed for security audit and performance testing.", "Alex Chen", "high"),
-        ("d-4", "meeting-5", "Prioritize mobile experience for Q1", "Mobile-first approach for all new features in Q1 2025.", "Alex Chen", "medium"),
+        ("d-1", "meeting-1", "Team agreed to break the monolith into microservices for the payment module."),
+        ("d-2", "meeting-1", "All new components and features will use TypeScript with strict mode."),
+        ("d-3", "meeting-4", "Additional time needed for security audit and performance testing — Q4 launch delayed 2 weeks."),
+        ("d-4", "meeting-5", "Mobile-first approach for all new features in Q1 2025."),
     ]
-    for did, mid, title, desc, decidedBy, impact in decisions_data:
-        db.add(models.Decision(id=did, meeting_id=mid, title=title, description=desc, decided_by=decidedBy, impact=impact))
+    for did, mid, decision in decisions_data:
+        db.add(models.Decision(id=did, meeting_id=mid, decision=decision))
 
     # Risks
     risks_data = [
-        ("r-1", "meeting-1", "API integration delayed", "Third-party payment SDK has unresolved bugs.", "high", "May delay Q4 release by 1-2 weeks", "Explore alternative payment providers as backup", "blocked"),
-        ("r-2", "meeting-1", "Resource constraint for testing", "QA team is understaffed for the security audit.", "medium", "Could miss critical security vulnerabilities", "Hire contract QA engineers for December", "resource issue"),
-        ("r-3", "meeting-4", "Budget overrun risk", "Q4 marketing spend exceeding projections.", "high", "May need to cut features or delay campaigns", "Review and prioritize marketing initiatives", "budget issue"),
-        ("r-4", "meeting-7", "Authentication vulnerability", "Potential session fixation issue identified.", "critical", "Security breach risk for user accounts", "Immediate patch and security audit", "waiting for approval"),
+        ("r-1", "meeting-1", "Third-party payment SDK has unresolved bugs — may delay Q4 release by 1-2 weeks."),
+        ("r-2", "meeting-1", "QA team is understaffed for the security audit — could miss critical vulnerabilities."),
+        ("r-3", "meeting-4", "Q4 marketing spend exceeding projections — may need to cut features or delay campaigns."),
+        ("r-4", "meeting-7", "Potential session fixation issue identified — security breach risk for user accounts."),
     ]
-    for rid, mid, title, desc, severity, impact, rec, phrase in risks_data:
-        db.add(models.Risk(id=rid, meeting_id=mid, title=title, description=desc, severity=severity, impact=impact, recommendation=rec, detected_phrase=phrase))
+    for rid, mid, description in risks_data:
+        db.add(models.Risk(id=rid, meeting_id=mid, description=description))
 
     # Notifications
     notifs = [

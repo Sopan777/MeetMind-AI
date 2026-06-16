@@ -71,6 +71,14 @@ async def get_pipeline():
                     pass
                 sys.modules['torchaudio.backend.common'].AudioMetaData = AudioMetaData
 
+            # Stub out optional speechbrain integrations that require uninstalled packages
+            for _mod in (
+                'speechbrain.integrations.k2_fsa',
+                'speechbrain.integrations.vosk',
+            ):
+                if _mod not in sys.modules:
+                    sys.modules[_mod] = types.ModuleType(_mod)
+
 
             from pyannote.audio import Pipeline
             import torch

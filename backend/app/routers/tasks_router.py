@@ -22,8 +22,6 @@ def create_task(data: schemas.ActionItemCreate, db: Session = Depends(get_db)):
         task=data.task,
         owner=data.owner,
         deadline=data.deadline,
-        priority=data.priority,
-        status="todo",
     )
     db.add(item)
     db.commit()
@@ -37,12 +35,12 @@ def update_task(task_id: str, data: schemas.ActionItemUpdate, db: Session = Depe
     task = db.query(models.ActionItem).filter(models.ActionItem.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if data.status is not None:
-        task.status = data.status
-    if data.priority is not None:
-        task.priority = data.priority
+    if data.review_status is not None:
+        task.review_status = data.review_status
     if data.owner is not None:
         task.owner = data.owner
+    if data.deadline is not None:
+        task.deadline = data.deadline
     db.commit()
     db.refresh(task)
     return task

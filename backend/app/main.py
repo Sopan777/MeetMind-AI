@@ -12,6 +12,7 @@ from .routers import auth_router, meetings_router, tasks_router, analytics_route
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Create tables and seed data on startup."""
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:

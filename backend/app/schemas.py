@@ -73,12 +73,11 @@ class ActionItemCreate(BaseModel):
     task: str
     owner: str
     deadline: str
-    priority: str = "medium"
 
 class ActionItemUpdate(BaseModel):
-    status: Optional[str] = None
-    priority: Optional[str] = None
+    review_status: Optional[str] = None
     owner: Optional[str] = None
+    deadline: Optional[str] = None
 
 class ActionItemResponse(BaseModel):
     id: str
@@ -86,8 +85,9 @@ class ActionItemResponse(BaseModel):
     task: str
     owner: str
     deadline: str
-    status: str
-    priority: str
+    review_status: Optional[str] = None
+    quote: Optional[str] = None
+    confidence: Optional[float] = None
     class Config:
         from_attributes = True
 
@@ -96,10 +96,10 @@ class ActionItemResponse(BaseModel):
 class DecisionResponse(BaseModel):
     id: str
     meeting_id: str
-    title: str
-    description: str
-    decided_by: str
-    impact: str
+    decision: str
+    timestamp: Optional[str] = None
+    quote: Optional[str] = None
+    confidence: Optional[float] = None
     class Config:
         from_attributes = True
 
@@ -108,12 +108,10 @@ class DecisionResponse(BaseModel):
 class RiskResponse(BaseModel):
     id: str
     meeting_id: str
-    title: str
     description: str
-    severity: str
-    impact: Optional[str]
-    recommendation: Optional[str]
-    detected_phrase: Optional[str]
+    timestamp: Optional[str] = None
+    quote: Optional[str] = None
+    confidence: Optional[float] = None
     class Config:
         from_attributes = True
 

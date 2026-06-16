@@ -1,6 +1,6 @@
 import datetime
 from datetime import timezone
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, Integer, BigInteger, Float, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -54,9 +54,9 @@ class MeetingEvent(Base):
 
     speaker_label = Column(String, nullable=True)
     text = Column(Text, nullable=True)
-    speech_start_ms = Column(Integer, nullable=True)
-    speech_end_ms = Column(Integer, nullable=True)
-    duration_ms = Column(Integer, nullable=True)
+    speech_start_ms = Column(BigInteger, nullable=True)
+    speech_end_ms = Column(BigInteger, nullable=True)
+    duration_ms = Column(BigInteger, nullable=True)
     transcription_confidence = Column(Float, nullable=True)
     speaker_confidence = Column(Float, nullable=True)
     language = Column(String, nullable=True)
