@@ -21,7 +21,7 @@ class GroqWhisperProvider(TranscriptionProvider):
             api_key=self.api_key,
             base_url="https://api.groq.com/openai/v1",
         )
-        self.model = "whisper-large-v3-turbo"
+        self.model = "whisper-large-v3"
         logger.info(f"Initialized GroqWhisperProvider with model {self.model}")
 
     async def transcribe(self, audio_bytes: bytes, prompt: Optional[str] = None) -> Optional[TranscriptionResult]:
@@ -32,14 +32,15 @@ class GroqWhisperProvider(TranscriptionProvider):
         audio_file.name = "audio.wav"
         
         # Truncate prompt if provided (Groq might have limits)
-        safe_prompt = prompt[:200] if prompt else None
+        safe_prompt = prompt[:448] if prompt else None
         
         try:
             kwargs = {
                 "model": self.model,
                 "file": audio_file,
                 "response_format": "verbose_json",
-                "language": "en"
+                "language": "en",
+                "temperature": 0,
             }
             if safe_prompt:
                 kwargs["prompt"] = safe_prompt
