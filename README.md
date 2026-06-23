@@ -2,6 +2,13 @@
 
 A real-time AI Meeting Intelligence Platform that captures screen/audio, generates live transcripts, and extracts action items, decisions, and risks — all while you meet.
 
+## Clone
+
+```bash
+git clone https://github.com/Sopan777/MeetMind-AI.git
+cd MeetMind-AI
+```
+
 ## What it does
 
 Share a browser tab, Zoom window, or system audio and MeetingMind:
